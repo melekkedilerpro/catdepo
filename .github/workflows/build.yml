@@ -29,28 +29,26 @@ jobs:
           cd analiz_app
           flutter pub add http
 
-          # Android İnternet İzinleri
+          # Android Ağ İzinleri
           sed -i 's/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">\n    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>/' android/app/src/main/AndroidManifest.xml
           sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
           cat << 'EOF' > lib/main.dart
           import 'dart:async';
-          import 'dart:convert';
           import 'package:flutter/material.dart';
           import 'package:http/http.dart' as http;
 
           void main() => runApp(const HizliOnApp());
 
           class HizliOnApp extends StatelessWidget {
-            const HizliOnApp({super.key});
+            const HizliOnApp({Key? key}) : super(key: key);
 
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
                 title: 'Hızlı On Canlı Takip',
-                theme: ThemeData(
-                  brightness: Brightness.dark,
+                theme: ThemeData.dark().copyWith(
                   scaffoldBackgroundColor: const Color(0xFF121212),
                 ),
                 home: const AnalizEkrani(),
@@ -59,7 +57,7 @@ jobs:
           }
 
           class AnalizEkrani extends StatefulWidget {
-            const AnalizEkrani({super.key});
+            const AnalizEkrani({Key? key}) : super(key: key);
 
             @override
             State<AnalizEkrani> createState() => _AnalizEkraniState();
@@ -68,7 +66,7 @@ jobs:
           class _AnalizEkraniState extends State<AnalizEkrani> {
             List<Map<String, dynamic>> cekilisler = [];
             bool _yukleniyor = false;
-            String _durum = 'Milli Piyango canlı taranıyor...';
+            String _durum = 'Milli Piyango taranıyor...';
             Timer? _timer;
 
             @override
@@ -89,51 +87,72 @@ jobs:
               setState(() => _yukleniyor = true);
 
               try {
-                final uri = Uri.parse('https://www.millipiyangoonline.com/api/draw-results/hizli-on-numara');
-                final res = await http.get(uri, headers: {
-                  'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36',
-                  'Accept': 'application/json',
+                final url = Uri.parse('https://www.millipiyangoonline.com/hizli-on-numara/sonuclar');
+                final res = await http.get(url, headers: {
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 }).timeout(const Duration(seconds: 15));
 
                 if (res.statusCode == 200) {
-                  final data = jsonDecode(res.body);
-                  List rawDraws = [];
+                  final text = res.body;
+                  List<Map<String, dynamic>> yeniListe = [];
 
-                  if (data is List) {
-                    rawDraws = data;
-                  } else if (data is Map && data.containsKey('data')) {
-                    rawDraws = data['data'] as List;
-                  } else if (data is Map && data.containsKey('drawResults')) {
-                    rawDraws = data['drawResults'] as List;
-                  }
+                  // 1. Desen: 49621. 17.08.2026-07:57. 4. 17...
+                  final p1 = RegExp(r'(\d{4,6})\.\s*\d{2}\.\d{2}\.\d{4}-\d{2}:\d{2}\.(.*?)(?=\d{4,6}\.\s*\d{2}\.\d{2}\.\d{4}|$)', dotAll: true);
+                  final m1 = p1.allMatches(text);
 
-                  List<Map<String, dynamic>> list = [];
-                  for (var item in rawDraws.take(20)) {
-                    final dNo = item['drawNo'] ?? item['draw_no'] ?? item['id'] ?? 0;
-                    final rawNums = item['numbers'] ?? item['winningNumbers'] ?? [];
+                  for (var m in m1) {
+                    final dNo = int.tryParse(m.group(1) ?? '') ?? 0;
+                    final numsRaw = m.group(2) ?? '';
+                    final numMatches = RegExp(r'\b([1-9]|[1-7][0-9]|80)\b').allMatches(numsRaw);
+
                     List<int> nums = [];
-                    for (var n in rawNums) {
-                      int? parsed = int.tryParse(n.toString());
-                      if (parsed != null && parsed >= 1 && parsed <= 80) {
-                        nums.add(parsed);
+                    for (var nm in numMatches) {
+                      final val = int.tryParse(nm.group(0)!);
+                      if (val != null && !nums.contains(val)) {
+                        nums.add(val);
                       }
                     }
+
                     if (nums.length >= 20) {
                       nums.sort();
-                      list.add({'draw_no': dNo, 'numbers': nums.take(20).toList()});
+                      yeniListe.add({'draw_no': dNo, 'numbers': nums.take(20).toList()});
                     }
                   }
 
-                  if (list.isNotEmpty) {
+                  // 2. Desen: Çekiliş no: 49621
+                  if (yeniListe.isEmpty) {
+                    final p2 = RegExp(r'Çekiliş\s*no:\s*(\d+)\.\s*\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}:\d{2}\.(.*?)(?=Çekiliş\s*no:|$)', caseSensitive: false, dotAll: true);
+                    final m2 = p2.allMatches(text);
+
+                    for (var m in m2) {
+                      final dNo = int.tryParse(m.group(1) ?? '') ?? 0;
+                      final numsRaw = m.group(2) ?? '';
+                      final numMatches = RegExp(r'\b([1-9]|[1-7][0-9]|80)\b').allMatches(numsRaw);
+
+                      List<int> nums = [];
+                      for (var nm in numMatches) {
+                        final val = int.tryParse(nm.group(0)!);
+                        if (val != null && !nums.contains(val)) nums.add(val);
+                      }
+
+                      if (nums.length >= 20) {
+                        nums.sort();
+                        yeniListe.add({'draw_no': dNo, 'numbers': nums.take(20).toList()});
+                      }
+                    }
+                  }
+
+                  if (yeniListe.isNotEmpty) {
                     setState(() {
-                      cekilisler = list;
-                      _durum = '🟢 Canlı ve Güncel (Son ${cekilisler.length} Çekiliş)';
+                      cekilisler = yeniListe;
+                      _durum = '🟢 Canlı ve Güncel (${cekilisler.length} Çekiliş)';
                     });
                   }
                 }
               } catch (_) {
                 if (cekilisler.isEmpty) {
-                  setState(() => _durum = 'Ağ kontrol ediliyor...');
+                  setState(() => _durum = 'Ağ taranıyor...');
                 }
               } finally {
                 if (mounted) setState(() => _yukleniyor = false);
@@ -141,7 +160,8 @@ jobs:
             }
 
             Map<int, int> frekansHesapla() {
-              Map<int, int> f = {for (var i = 1; i <= 80; i++) i: 0};
+              Map<int, int> f = {};
+              for (int i = 1; i <= 80; i++) f[i] = 0;
               for (var d in cekilisler) {
                 for (var n in List<int>.from(d['numbers'])) {
                   f[n] = (f[n] ?? 0) + 1;
@@ -186,7 +206,7 @@ jobs:
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceAround,
                             children: [
-                              Text('Çekiliş: ${cekilisler.length}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              Text('Analiz: ${cekilisler.length} Çekiliş', style: const TextStyle(fontWeight: FontWeight.bold)),
                               Text(_durum, style: const TextStyle(fontSize: 11, color: Colors.amberAccent)),
                             ],
                           ),
@@ -198,12 +218,12 @@ jobs:
                         const SizedBox(height: 20),
                         const Text('❄️ En Az Çıkan Sayılar (En Soğuk 10)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.lightBlueAccent)),
                         const SizedBox(height: 8),
-                        _grid(soguklar, Colors.lightBlueAccent),
+                        _grid(cekilisler.isEmpty ? [] : soguklar, Colors.lightBlueAccent),
                         const SizedBox(height: 20),
-                        const Text('📋 Canlı 20\'lik Çekilişler', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                        const Text('📋 Otomatik Çekilen Canlı Çekilişler', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
                         const SizedBox(height: 8),
                         if (cekilisler.isEmpty)
-                          const Center(child: Padding(padding: EdgeInsets.all(30), child: Text('Canlı veriler yükleniyor...', style: TextStyle(color: Colors.grey))))
+                          const Center(child: Padding(padding: EdgeInsets.all(30), child: Text('Milli Piyango sonuçları yükleniyor...', style: TextStyle(color: Colors.grey))))
                         else
                           ListView.builder(
                             shrinkWrap: true,
@@ -252,7 +272,7 @@ jobs:
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, crossAxisSpacing: 6, mainAxisSpacing: 6, childAspectRatio: 1),
                 itemCount: items.length,
                 itemBuilder: (context, i) => Container(
-                  decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(6), border: Border.all(color: c.withValues(alpha: 0.5))),
+                  decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(6), border: Border.all(color: c.withOpacity(0.5))),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
