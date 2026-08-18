@@ -1,4 +1,4 @@
-name: Blok Futbol APK
+name: Volta Sokak Futbolu APK
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
 
       - name: Projeyi Hazirla
         run: |
-          flutter create --platforms=android --org com.blokfutbol futbol_app
+          flutter create --platforms=android --org com.voltafutbol futbol_app
           cd futbol_app
 
           cat << 'EOF' > lib/main.dart
@@ -33,271 +33,418 @@ jobs:
           import 'dart:math';
           import 'package:flutter/material.dart';
 
-          void main() => runApp(const BlockSoccerApp());
+          void main() => runApp(const VoltaSoccerApp());
 
-          class BlockSoccerApp extends StatelessWidget {
-            const BlockSoccerApp({Key? key}) : super(key: key);
+          class VoltaSoccerApp extends StatelessWidget {
+            const VoltaSoccerApp({Key? key}) : super(key: key);
 
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
-                title: 'Blok Futbol',
+                title: 'Volta Futbol',
                 theme: ThemeData.dark(),
-                home: const SoccerGameScreen(),
+                home: const MainMenuScreen(),
               );
             }
           }
 
-          class SoccerGameScreen extends StatefulWidget {
-            const SoccerGameScreen({Key? key}) : super(key: key);
+          class MainMenuScreen extends StatelessWidget {
+            const MainMenuScreen({Key? key}) : super(key: key);
 
             @override
-            State<SoccerGameScreen> createState() => _SoccerGameScreenState();
+            Widget build(BuildContext context) {
+              return Scaffold(
+                backgroundColor: const Color(0xFF11141C),
+                body: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('⚡ VOLTA SOKAK FUTBOLU ⚡', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                        const SizedBox(height: 10),
+                        const Text('Kafes Maçı Modunu Seçin', style: TextStyle(color: Colors.grey)),
+                        const SizedBox(height: 40),
+                        _modeButton(context, '2 vs 2 (Hızlı Kafes)', 2),
+                        const SizedBox(height: 14),
+                        _modeButton(context, '3 vs 3 (Sokak Klasik)', 3),
+                        const SizedBox(height: 14),
+                        _modeButton(context, '5 vs 5 (Tam Saha Volta)', 5),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            Widget _modeButton(BuildContext context, String title, int count) {
+              return SizedBox(
+                width: 260,
+                height: 50,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber[700],
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => MatchScreen(teamSize: count)));
+                  },
+                  child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              );
+            }
           }
 
-          class Particle {
-            double x, y, vx, vy, size;
-            Color color;
-            double alpha;
-            Particle(this.x, this.y, this.vx, this.vy, this.size, this.color, this.alpha);
+          class Player {
+            double x, y;
+            double vx = 0, vy = 0;
+            bool isTeamRed; // true: Oyuncu Takımı (Kırmızı), false: Rakip (Mavi)
+            bool isControlled;
+            Player(this.x, this.y, this.isTeamRed, {this.isControlled = false});
           }
 
-          class _SoccerGameScreenState extends State<SoccerGameScreen> {
-            int score = 0;
-            int highScore = 0;
-            int lives = 5;
-            String message = 'Şut Çekmek İçin Topu İleri Kaydır!';
-            Color msgColor = Colors.amberAccent;
+          class MatchScreen extends StatefulWidget {
+            final int teamSize;
+            const MatchScreen({Key? key, required this.teamSize}) : super(key: key);
 
-            // Top Pozisyonu
-            double ballX = 0;
-            double ballY = 0.8;
-            double ballScale = 1.0;
-            double ballVx = 0;
-            double ballVy = 0;
-            bool isBallMoving = false;
+            @override
+            State<MatchScreen> createState() => _MatchScreenState();
+          }
 
-            // Minecraft Steve Kaleci
-            double keeperX = 0;
-            double keeperVx = 0.025;
-            double keeperY = 0.22;
+          class _MatchScreenState extends State<MatchScreen> {
+            // Saha ve Top
+            double ballX = 0, ballY = 0;
+            double ballVx = 0, ballVy = 0;
+            int scoreRed = 0, scoreBlue = 0;
+            int matchTime = 90;
 
-            // Parçacıklar
-            List<Particle> particles = [];
-            Timer? gameTimer;
-            Offset? dragStart;
+            // Joystick
+            Offset joystickDelta = Offset.zero;
+            bool isJoystickActive = false;
+
+            List<Player> players = [];
+            Timer? loopTimer;
+            Timer? matchTimer;
+            String announcement = '';
 
             @override
             void initState() {
               super.initState();
-              gameTimer = Timer.periodic(const Duration(milliseconds: 20), (t) => updateGame());
+              initMatch();
+              loopTimer = Timer.periodic(const Duration(milliseconds: 25), (t) => updatePhysics());
+              matchTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+                if (matchTime > 0) {
+                  setState(() => matchTime--);
+                } else {
+                  t.cancel();
+                  setState(() => announcement = 'MAÇ BİTTİ!');
+                }
+              });
             }
 
             @override
             void dispose() {
-              gameTimer?.cancel();
+              loopTimer?.cancel();
+              matchTimer?.cancel();
               super.dispose();
             }
 
-            void resetBall() {
-              setState(() {
-                ballX = 0;
-                ballY = 0.8;
-                ballScale = 1.0;
-                ballVx = 0;
-                ballVy = 0;
-                isBallMoving = false;
-              });
-            }
+            void initMatch() {
+              players.clear();
+              ballX = 0;
+              ballY = 0;
+              ballVx = 0;
+              ballVy = 0;
 
-            void triggerGoalExplosion(double x, double y) {
-              final rnd = Random();
-              for (int i = 0; i < 30; i++) {
-                double angle = rnd.nextDouble() * 2 * pi;
-                double speed = rnd.nextDouble() * 0.02 + 0.005;
-                particles.add(Particle(
-                  x,
-                  y,
-                  cos(angle) * speed,
-                  sin(angle) * speed,
-                  rnd.nextDouble() * 10 + 6,
-                  rnd.nextBool() ? Colors.greenAccent : (rnd.nextBool() ? Colors.amber : Colors.white),
-                  1.0,
-                ));
+              // Kırmızı Takım (Oyuncu)
+              for (int i = 0; i < widget.teamSize; i++) {
+                double py = (i - (widget.teamSize - 1) / 2) * 0.45;
+                players.add(Player(-0.5, py, true, isControlled: (i == 0)));
+              }
+
+              // Mavi Takım (Rakip)
+              for (int i = 0; i < widget.teamSize; i++) {
+                double py = (i - (widget.teamSize - 1) / 2) * 0.45;
+                players.add(Player(0.5, py, false));
               }
             }
 
-            void updateGame() {
+            void updatePhysics() {
               setState(() {
-                // Kaleci Hareketi
-                keeperX += keeperVx;
-                if (keeperX > 0.65 || keeperX < -0.65) {
-                  keeperVx = -keeperVx;
+                // 1. Joystick ile Kontrol Edilen Oyuncu
+                for (var p in players) {
+                  if (p.isControlled) {
+                    p.x += joystickDelta.dx * 0.025;
+                    p.y += joystickDelta.dy * 0.025;
+                  } else {
+                    // Yapay Zeka (Topa veya Pozisyona Koşma)
+                    double targetX = p.isTeamRed ? (ballX - 0.2) : (ballX + 0.2);
+                    double targetY = ballY;
+
+                    double dx = ballX - p.x;
+                    double dy = ballY - p.y;
+                    double dist = sqrt(dx * dx + dy * dy);
+
+                    if (dist > 0.05) {
+                      p.x += (dx / dist) * 0.012;
+                      p.y += (dy / dist) * 0.012;
+                    }
+
+                    // Rakip Şut Çekme Mantığı
+                    if (!p.isTeamRed && dist < 0.08) {
+                      ballVx = -0.04;
+                      ballVy = (Random().nextDouble() - 0.5) * 0.03;
+                    }
+                  }
+
+                  // Saha Sınırları
+                  p.x = p.x.clamp(-0.9, 0.9);
+                  p.y = p.y.clamp(-0.85, 0.85);
+
+                  // Topa Çarpma (Dribling)
+                  double bdx = ballX - p.x;
+                  double bdy = ballY - p.y;
+                  double bDist = sqrt(bdx * bdx + bdy * bdy);
+                  if (bDist < 0.07) {
+                    ballVx = bdx * 0.35 + (p.isControlled ? joystickDelta.dx * 0.015 : 0);
+                    ballVy = bdy * 0.35 + (p.isControlled ? joystickDelta.dy * 0.015 : 0);
+                  }
                 }
 
-                // Parçacıklar
-                for (var p in particles) {
-                  p.x += p.vx;
-                  p.y += p.vy;
-                  p.alpha -= 0.03;
+                // 2. Top Fiziği (Sürtünme ve Duvarlar)
+                ballX += ballVx;
+                ballY += ballVy;
+                ballVx *= 0.94; // Sürtünme
+                ballVy *= 0.94;
+
+                // Kafes Duvarlarından Sekme
+                if (ballY > 0.88 || ballY < -0.88) {
+                  ballVy = -ballVy * 0.8;
+                  ballY = ballY.clamp(-0.88, 0.88);
                 }
-                particles.removeWhere((p) => p.alpha <= 0);
 
-                // Top Hareketi
-                if (isBallMoving) {
-                  ballX += ballVx;
-                  ballY += ballVy;
-                  ballScale = max(0.45, ballScale - 0.015);
-
-                  if (ballY <= 0.23) {
-                    isBallMoving = false;
-
-                    // Kurtarış
-                    if ((ballX - keeperX).abs() < 0.28) {
-                      lives--;
-                      message = '❌ KALECİ KURTARDI!';
-                      msgColor = Colors.redAccent;
-                      Future.delayed(const Duration(milliseconds: 1200), () {
-                        if (lives <= 0) {
-                          lives = 5;
-                          score = 0;
-                        }
-                        resetBall();
-                      });
-                    }
-                    // Gol
-                    else if (ballX >= -0.75 && ballX <= 0.75) {
-                      score++;
-                      if (score > highScore) highScore = score;
-                      message = '⚽ GOOOOL! (+1)';
-                      msgColor = Colors.greenAccent;
-                      triggerGoalExplosion(ballX, ballY);
-                      keeperVx = (keeperVx.abs() + 0.003) * (keeperVx > 0 ? 1 : -1);
-
-                      Future.delayed(const Duration(milliseconds: 1200), () {
-                        resetBall();
-                      });
-                    }
-                    // Aut
-                    else {
-                      lives--;
-                      message = '💨 DIŞARI ÇIKTI (AUT)!';
-                      msgColor = Colors.orangeAccent;
-                      Future.delayed(const Duration(milliseconds: 1200), () {
-                        if (lives <= 0) {
-                          lives = 5;
-                          score = 0;
-                        }
-                        resetBall();
-                      });
-                    }
+                // Gol Kontrolü (Sol ve Sağ Kale: Y [-0.25, 0.25])
+                if (ballX > 0.92) {
+                  if (ballY > -0.28 && ballY < 0.28) {
+                    scoreRed++;
+                    goalCelebration('⚽ GOL! KIRMIZI TAKIM');
+                  } else {
+                    ballVx = -ballVx * 0.8;
+                    ballX = 0.92;
+                  }
+                } else if (ballX < -0.92) {
+                  if (ballY > -0.28 && ballY < 0.28) {
+                    scoreBlue++;
+                    goalCelebration('⚽ GOL! MAVİ TAKIM');
+                  } else {
+                    ballVx = -ballVx * 0.8;
+                    ballX = -0.92;
                   }
                 }
               });
             }
 
-            void onPanStart(DragStartDetails d) {
-              if (isBallMoving) return;
-              dragStart = d.localPosition;
+            void goalCelebration(String msg) {
+              setState(() {
+                announcement = msg;
+                ballVx = 0;
+                ballVy = 0;
+              });
+              Future.delayed(const Duration(seconds: 2), () {
+                if (mounted) {
+                  setState(() => announcement = '');
+                  initMatch();
+                }
+              });
             }
 
-            void onPanEnd(DragEndDetails d) {
-              if (isBallMoving || dragStart == null) return;
-              final diff = d.velocity.pixelsPerSecond;
-
-              if (diff.dy < -200) {
+            void shoot() {
+              Player user = players.firstWhere((p) => p.isControlled);
+              double dist = sqrt(pow(ballX - user.x, 2) + pow(ballY - user.y, 2));
+              if (dist < 0.12) {
                 setState(() {
-                  isBallMoving = true;
-                  ballVy = -0.025;
-                  ballVx = (diff.dx / 12000).clamp(-0.028, 0.028);
-                  message = 'ŞUT ÇEKİLDİ!';
-                  msgColor = Colors.white;
+                  // Kaleye doğru sert şut
+                  ballVx = 0.055;
+                  ballVy = (user.y > 0 ? -0.01 : 0.01);
                 });
+              }
+            }
+
+            void pass() {
+              Player user = players.firstWhere((p) => p.isControlled);
+              double dist = sqrt(pow(ballX - user.x, 2) + pow(ballY - user.y, 2));
+              if (dist < 0.12) {
+                // En yakın takım arkadaşını bul
+                Player? teammate;
+                double minDist = 999;
+                for (var p in players) {
+                  if (p.isTeamRed && !p.isControlled) {
+                    double d = sqrt(pow(p.x - user.x, 2) + pow(p.y - user.y, 2));
+                    if (d < minDist) {
+                      minDist = d;
+                      teammate = p;
+                    }
+                  }
+                }
+                if (teammate != null) {
+                  double dx = teammate.x - ballX;
+                  double dy = teammate.y - ballY;
+                  double d = sqrt(dx * dx + dy * dy);
+                  setState(() {
+                    ballVx = (dx / d) * 0.035;
+                    ballVy = (dy / d) * 0.035;
+                  });
+                }
               }
             }
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                backgroundColor: const Color(0xFF1B3B1B),
-                body: GestureDetector(
-                  onPanStart: onPanStart,
-                  onPanEnd: onPanEnd,
+                backgroundColor: const Color(0xFF1E1E1E),
+                body: SafeArea(
                   child: Stack(
                     children: [
-                      CustomPaint(
-                        size: Size.infinite,
-                        painter: MinecraftPitchPainter(),
+                      // Volta Kafes Sahası
+                      Positioned.fill(
+                        child: CustomPaint(painter: VoltaPitchPainter()),
                       ),
+
+                      // Skor & Süre Paneli
                       Positioned(
-                        top: 40,
+                        top: 10,
                         left: 20,
                         right: 20,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF2C2C2C).withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white38, width: 3),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text('🔴 SEN: $scoreRed', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
+                              child: Text('⏳ ${matchTime}s', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            Text('MAVİ: $scoreBlue 🔵', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                          ],
+                        ),
+                      ),
+
+                      // Gol Duyurusu
+                      if (announcement.isNotEmpty)
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            color: Colors.black87,
+                            child: Text(announcement, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('GOL: $score', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                                  Text('REKOR: $highScore', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                ],
-                              ),
-                              Row(
-                                children: List.generate(5, (i) => Icon(
-                                  Icons.favorite,
-                                  color: i < lives ? Colors.redAccent : Colors.black45,
-                                  size: 20,
-                                )),
-                              ),
-                            ],
+                        ),
+
+                      // Oyuncular (İnsan Görünümlü 2D Karakterler)
+                      ...players.map((p) => Align(
+                        alignment: Alignment(p.x, p.y),
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: p.isTeamRed ? Colors.red : Colors.blue,
+                            border: Border.all(color: p.isControlled ? Colors.yellowAccent : Colors.white, width: p.isControlled ? 3 : 1.5),
+                            boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 4, offset: const Offset(1, 2))],
+                          ),
+                          child: Center(
+                            child: Container(
+                              width: 8,
+                              height: 8,
+                              decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFFCC80)), // Ten rengi kafa
+                            ),
+                          ),
+                        ),
+                      )),
+
+                      // Futbol Topu
+                      Align(
+                        alignment: Alignment(ballX, ballY),
+                        child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            boxShadow: [BoxShadow(color: Colors.black87, blurRadius: 3)],
                           ),
                         ),
                       ),
+
+                      // Kontroller: Sol Taraf Sanal Joystick
                       Positioned(
-                        top: 110,
-                        left: 0,
-                        right: 0,
-                        child: Center(
+                        bottom: 30,
+                        left: 30,
+                        child: GestureDetector(
+                          onPanStart: (d) => setState(() => isJoystickActive = true),
+                          onPanUpdate: (d) {
+                            setState(() {
+                              joystickDelta = Offset(
+                                (d.localPosition.dx - 45).clamp(-45.0, 45.0) / 45.0,
+                                (d.localPosition.dy - 45).clamp(-45.0, 45.0) / 45.0,
+                              );
+                            });
+                          },
+                          onPanEnd: (d) {
+                            setState(() {
+                              joystickDelta = Offset.zero;
+                              isJoystickActive = false;
+                            });
+                          },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            color: Colors.black54,
-                            child: Text(
-                              message,
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: msgColor),
+                            width: 90,
+                            height: 90,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white12,
+                              border: Border.all(color: Colors.white30, width: 2),
+                            ),
+                            child: Center(
+                              child: Transform.translate(
+                                offset: joystickDelta * 25,
+                                child: Container(
+                                  width: 38,
+                                  height: 38,
+                                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.amberAccent),
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                      Align(
-                        alignment: Alignment(keeperX, -0.55),
-                        child: const MinecraftSteveKeeper(),
-                      ),
-                      ...particles.map((p) => Positioned(
-                        left: (MediaQuery.of(context).size.width / 2) + (p.x * (MediaQuery.of(context).size.width / 2)),
-                        top: (MediaQuery.of(context).size.height / 2) + (p.y * (MediaQuery.of(context).size.height / 2)),
-                        child: Container(
-                          width: p.size,
-                          height: p.size,
-                          decoration: BoxDecoration(
-                            color: p.color.withOpacity(p.alpha.clamp(0.0, 1.0)),
-                            borderRadius: BorderRadius.circular(1),
-                          ),
-                        ),
-                      )),
-                      Align(
-                        alignment: Alignment(ballX, ballY),
-                        child: Transform.scale(
-                          scale: ballScale,
-                          child: const MinecraftBall(),
+
+                      // Kontroller: Sağ Taraf ŞUT & PAS Butonları
+                      Positioned(
+                        bottom: 30,
+                        right: 30,
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: pass,
+                              child: Container(
+                                width: 55,
+                                height: 55,
+                                decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.blueAccent),
+                                child: const Center(child: Text('PAS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            GestureDetector(
+                              onTap: shoot,
+                              child: Container(
+                                width: 65,
+                                height: 65,
+                                decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.redAccent),
+                                child: const Center(child: Text('ŞUT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -307,130 +454,30 @@ jobs:
             }
           }
 
-          class MinecraftPitchPainter extends CustomPainter {
+          class VoltaPitchPainter extends CustomPainter {
             @override
             void paint(Canvas canvas, Size size) {
-              final paint = Paint();
-              final blockSize = 40.0;
-              for (double x = 0; x < size.width; x += blockSize) {
-                for (double y = 0; y < size.height; y += blockSize) {
-                  paint.color = ((x / blockSize).toInt() + (y / blockSize).toInt()) % 2 == 0
-                      ? const Color(0xFF388E3C)
-                      : const Color(0xFF2E7D32);
-                  canvas.drawRect(Rect.fromLTWH(x, y, blockSize, blockSize), paint);
-                }
-              }
+              final p = Paint()..color = const Color(0xFF23382B); // Kafes zemin
+              canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
 
-              final goalW = size.width * 0.78;
-              final goalH = 130.0;
-              final goalLeft = (size.width - goalW) / 2;
-              final goalTop = size.height * 0.12;
+              final linePaint = Paint()
+                ..color = Colors.white24
+                ..strokeWidth = 2
+                ..style = PaintingStyle.stroke;
 
-              paint.color = const Color(0xFF1E1E1E).withOpacity(0.65);
-              canvas.drawRect(Rect.fromLTWH(goalLeft, goalTop, goalW, goalH), paint);
+              // Saha Çizgileri
+              canvas.drawRect(Rect.fromLTWH(15, 30, size.width - 30, size.height - 60), linePaint);
+              canvas.drawLine(Offset(size.width / 2, 30), Offset(size.width / 2, size.height - 30), linePaint);
+              canvas.drawCircle(Offset(size.width / 2, size.height / 2), 45, linePaint);
 
-              paint.color = Colors.white24;
-              paint.strokeWidth = 2;
-              for (double gx = goalLeft; gx <= goalLeft + goalW; gx += 20) {
-                canvas.drawLine(Offset(gx, goalTop), Offset(gx, goalTop + goalH), paint);
-              }
-              for (double gy = goalTop; gy <= goalTop + goalH; gy += 20) {
-                canvas.drawLine(Offset(goalLeft, gy), Offset(goalLeft + goalW, gy), paint);
-              }
-
-              paint.color = Colors.white;
-              paint.strokeWidth = 8;
-              paint.style = PaintingStyle.stroke;
-              canvas.drawRect(Rect.fromLTWH(goalLeft, goalTop, goalW, goalH), paint);
+              // Kaleler
+              final goalPaint = Paint()..color = Colors.amber.withOpacity(0.5)..style = PaintingStyle.stroke..strokeWidth = 3;
+              canvas.drawRect(Rect.fromLTWH(2, (size.height / 2) - 40, 13, 80), goalPaint); // Sol Kale
+              canvas.drawRect(Rect.fromLTWH(size.width - 15, (size.height / 2) - 40, 13, 80), goalPaint); // Sağ Kale
             }
 
             @override
             bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-          }
-
-          class MinecraftSteveKeeper extends StatelessWidget {
-            const MinecraftSteveKeeper({Key? key}) : super(key: key);
-
-            @override
-            Widget build(BuildContext context) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFB57B52),
-                      border: Border.all(color: const Color(0xFF4A2A18), width: 3),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Container(height: 10, color: const Color(0xFF4A2A18)),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: [
-                            Container(width: 6, height: 6, color: Colors.blueAccent),
-                            Container(width: 6, height: 6, color: Colors.blueAccent),
-                          ],
-                        ),
-                        Container(height: 4, width: 12, color: const Color(0xFF4A2A18)),
-                      ],
-                    ),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(width: 12, height: 32, color: Colors.amberAccent, margin: const EdgeInsets.only(right: 2)),
-                      Container(width: 30, height: 34, color: const Color(0xFF00838F)),
-                      Container(width: 12, height: 32, color: Colors.amberAccent, margin: const EdgeInsets.only(left: 2)),
-                    ],
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(width: 14, height: 22, color: const Color(0xFF1A237E), margin: const EdgeInsets.only(right: 2)),
-                      Container(width: 14, height: 22, color: const Color(0xFF1A237E)),
-                    ],
-                  ),
-                ],
-              );
-            }
-          }
-
-          class MinecraftBall extends StatelessWidget {
-            const MinecraftBall({Key? key}) : super(key: key);
-
-            @override
-            Widget build(BuildContext context) {
-              return Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.black, width: 4),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black54, offset: Offset(4, 6), blurRadius: 4),
-                  ],
-                ),
-                child: GridView.count(
-                  crossAxisCount: 3,
-                  padding: EdgeInsets.zero,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    Container(color: Colors.white),
-                    Container(color: Colors.black87),
-                    Container(color: Colors.white),
-                    Container(color: Colors.black87),
-                    Container(color: Colors.white),
-                    Container(color: Colors.black87),
-                    Container(color: Colors.white),
-                    Container(color: Colors.black87),
-                    Container(color: Colors.white),
-                  ],
-                ),
-              );
-            }
           }
           EOF
 
@@ -442,5 +489,5 @@ jobs:
       - name: APK Yukle
         uses: actions/upload-artifact@v4
         with:
-          name: BlokFutbolOyunu
+          name: VoltaFutbolOyunu
           path: futbol_app/build/app/outputs/flutter-apk/app-release.apk
