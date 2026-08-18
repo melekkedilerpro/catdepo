@@ -1,0 +1,278 @@
+name: Hizli On Canli APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Depoyu Al
+        uses: actions/checkout@v4
+
+      - name: Java 17 Kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Flutter Kur
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Projeyi Hazirla
+        run: |
+          flutter create --platforms=android --org com.hizlion analiz_app
+          cd analiz_app
+          flutter pub add http
+
+          # Android İnternet İzinleri
+          sed -i 's/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">/<manifest xmlns:android="http:\/\/schemas.android.com\/apk\/res\/android">\n    <uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/<application/<application android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
+
+          cat << 'EOF' > lib/main.dart
+          import 'dart:async';
+          import 'dart:convert';
+          import 'package:flutter/material.dart';
+          import 'package:http/http.dart' as http;
+
+          void main() => runApp(const HizliOnApp());
+
+          class HizliOnApp extends StatelessWidget {
+            const HizliOnApp({super.key});
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                debugShowCheckedModeBanner: false,
+                title: 'Hızlı On Canlı Takip',
+                theme: ThemeData(
+                  brightness: Brightness.dark,
+                  scaffoldBackgroundColor: const Color(0xFF121212),
+                ),
+                home: const AnalizEkrani(),
+              );
+            }
+          }
+
+          class AnalizEkrani extends StatefulWidget {
+            const AnalizEkrani({super.key});
+
+            @override
+            State<AnalizEkrani> createState() => _AnalizEkraniState();
+          }
+
+          class _AnalizEkraniState extends State<AnalizEkrani> {
+            List<Map<String, dynamic>> cekilisler = [];
+            bool _yukleniyor = false;
+            String _durum = 'Milli Piyango canlı taranıyor...';
+            Timer? _timer;
+
+            @override
+            void initState() {
+              super.initState();
+              canliVeriCek();
+              _timer = Timer.periodic(const Duration(seconds: 20), (t) => canliVeriCek());
+            }
+
+            @override
+            void dispose() {
+              _timer?.cancel();
+              super.dispose();
+            }
+
+            Future<void> canliVeriCek() async {
+              if (!mounted) return;
+              setState(() => _yukleniyor = true);
+
+              try {
+                final uri = Uri.parse('https://www.millipiyangoonline.com/api/draw-results/hizli-on-numara');
+                final res = await http.get(uri, headers: {
+                  'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36',
+                  'Accept': 'application/json',
+                }).timeout(const Duration(seconds: 15));
+
+                if (res.statusCode == 200) {
+                  final data = jsonDecode(res.body);
+                  List rawDraws = [];
+
+                  if (data is List) {
+                    rawDraws = data;
+                  } else if (data is Map && data.containsKey('data')) {
+                    rawDraws = data['data'] as List;
+                  } else if (data is Map && data.containsKey('drawResults')) {
+                    rawDraws = data['drawResults'] as List;
+                  }
+
+                  List<Map<String, dynamic>> list = [];
+                  for (var item in rawDraws.take(20)) {
+                    final dNo = item['drawNo'] ?? item['draw_no'] ?? item['id'] ?? 0;
+                    final rawNums = item['numbers'] ?? item['winningNumbers'] ?? [];
+                    List<int> nums = [];
+                    for (var n in rawNums) {
+                      int? parsed = int.tryParse(n.toString());
+                      if (parsed != null && parsed >= 1 && parsed <= 80) {
+                        nums.add(parsed);
+                      }
+                    }
+                    if (nums.length >= 20) {
+                      nums.sort();
+                      list.add({'draw_no': dNo, 'numbers': nums.take(20).toList()});
+                    }
+                  }
+
+                  if (list.isNotEmpty) {
+                    setState(() {
+                      cekilisler = list;
+                      _durum = '🟢 Canlı ve Güncel (Son ${cekilisler.length} Çekiliş)';
+                    });
+                  }
+                }
+              } catch (_) {
+                if (cekilisler.isEmpty) {
+                  setState(() => _durum = 'Ağ kontrol ediliyor...');
+                }
+              } finally {
+                if (mounted) setState(() => _yukleniyor = false);
+              }
+            }
+
+            Map<int, int> frekansHesapla() {
+              Map<int, int> f = {for (var i = 1; i <= 80; i++) i: 0};
+              for (var d in cekilisler) {
+                for (var n in List<int>.from(d['numbers'])) {
+                  f[n] = (f[n] ?? 0) + 1;
+                }
+              }
+              return f;
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              final f = frekansHesapla();
+              final sirali = f.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+              final sicaklar = sirali.take(10).toList();
+              final soguklar = sirali.reversed.take(10).toList();
+
+              return Scaffold(
+                appBar: AppBar(
+                  title: const Text('🎯 Hızlı On Canlı Takip'),
+                  centerTitle: true,
+                  backgroundColor: const Color(0xFF1E1E1E),
+                  actions: [
+                    IconButton(
+                      icon: _yukleniyor
+                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber))
+                          : const Icon(Icons.sync, color: Colors.greenAccent),
+                      onPressed: canliVeriCek,
+                    )
+                  ],
+                ),
+                body: RefreshIndicator(
+                  onRefresh: canliVeriCek,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(color: const Color(0xFF2A2A2A), borderRadius: BorderRadius.circular(10)),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              Text('Çekiliş: ${cekilisler.length}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              Text(_durum, style: const TextStyle(fontSize: 11, color: Colors.amberAccent)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text('🔥 En Çok Çıkan Sayılar (En Sıcak 10)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.orangeAccent)),
+                        const SizedBox(height: 8),
+                        _grid(cekilisler.isEmpty ? [] : sicaklar, Colors.orangeAccent),
+                        const SizedBox(height: 20),
+                        const Text('❄️ En Az Çıkan Sayılar (En Soğuk 10)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.lightBlueAccent)),
+                        const SizedBox(height: 8),
+                        _grid(soguklar, Colors.lightBlueAccent),
+                        const SizedBox(height: 20),
+                        const Text('📋 Canlı 20\'lik Çekilişler', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)),
+                        const SizedBox(height: 8),
+                        if (cekilisler.isEmpty)
+                          const Center(child: Padding(padding: EdgeInsets.all(30), child: Text('Canlı veriler yükleniyor...', style: TextStyle(color: Colors.grey))))
+                        else
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: cekilisler.length,
+                            itemBuilder: (context, index) {
+                              final item = cekilisler[index];
+                              final List<int> nums = List<int>.from(item['numbers']);
+                              return Card(
+                                color: const Color(0xFF222222),
+                                margin: const EdgeInsets.only(bottom: 6),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Çekiliş No: #${item['draw_no']}', style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 12)),
+                                      const SizedBox(height: 4),
+                                      Wrap(
+                                        spacing: 4,
+                                        runSpacing: 4,
+                                        children: nums.map((n) => Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                          decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.white24)),
+                                          child: Text('$n', style: const TextStyle(fontSize: 11, color: Colors.white)),
+                                        )).toList(),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            Widget _grid(List<MapEntry<int, int>> items, Color c) {
+              if (items.isEmpty) return const Text('Veri yok.', style: TextStyle(color: Colors.grey));
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 5, crossAxisSpacing: 6, mainAxisSpacing: 6, childAspectRatio: 1),
+                itemCount: items.length,
+                itemBuilder: (context, i) => Container(
+                  decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(6), border: Border.all(color: c.withValues(alpha: 0.5))),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('${items[i].key}', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c)),
+                      Text('${items[i].value}x', style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+              );
+            }
+          }
+          EOF
+
+      - name: APK Derle
+        run: |
+          cd analiz_app
+          flutter build apk --release
+
+      - name: APK Yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: HizliOnCanliTakip
+          path: analiz_app/build/app/outputs/flutter-apk/app-release.apk
