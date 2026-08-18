@@ -1,4 +1,4 @@
-name: Volta Sokak Futbolu APK
+name: Futbol Menajeri APK
 
 on:
   push:
@@ -25,427 +25,385 @@ jobs:
 
       - name: Projeyi Hazirla
         run: |
-          flutter create --platforms=android --org com.voltafutbol futbol_app
-          cd futbol_app
+          flutter create --platforms=android --org com.futbolmenajeri menajer_app
+          cd menajer_app
 
           cat << 'EOF' > lib/main.dart
           import 'dart:async';
           import 'dart:math';
           import 'package:flutter/material.dart';
 
-          void main() => runApp(const VoltaSoccerApp());
+          void main() => runApp(const MenajerApp());
 
-          class VoltaSoccerApp extends StatelessWidget {
-            const VoltaSoccerApp({Key? key}) : super(key: key);
+          class MenajerApp extends StatelessWidget {
+            const MenajerApp({Key? key}) : super(key: key);
 
             @override
             Widget build(BuildContext context) {
               return MaterialApp(
                 debugShowCheckedModeBanner: false,
-                title: 'Volta Futbol',
-                theme: ThemeData.dark(),
-                home: const MainMenuScreen(),
+                title: 'Süper Lig 20 Takım Menajer',
+                theme: ThemeData.dark().copyWith(
+                  scaffoldBackgroundColor: const Color(0xFF10141E),
+                  primaryColor: Colors.amber,
+                ),
+                home: const AnaPanel(),
               );
             }
           }
 
-          class MainMenuScreen extends StatelessWidget {
-            const MainMenuScreen({Key? key}) : super(key: key);
-
-            @override
-            Widget build(BuildContext context) {
-              return Scaffold(
-                backgroundColor: const Color(0xFF11141C),
-                body: Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('⚡ VOLTA SOKAK FUTBOLU ⚡', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                        const SizedBox(height: 10),
-                        const Text('Kafes Maçı Modunu Seçin', style: TextStyle(color: Colors.grey)),
-                        const SizedBox(height: 40),
-                        _modeButton(context, '2 vs 2 (Hızlı Kafes)', 2),
-                        const SizedBox(height: 14),
-                        _modeButton(context, '3 vs 3 (Sokak Klasik)', 3),
-                        const SizedBox(height: 14),
-                        _modeButton(context, '5 vs 5 (Tam Saha Volta)', 5),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }
-
-            Widget _modeButton(BuildContext context, String title, int count) {
-              return SizedBox(
-                width: 260,
-                height: 50,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.amber[700],
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: () {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => MatchScreen(teamSize: count)));
-                  },
-                  child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ),
-              );
-            }
+          class Team {
+            String name;
+            int attack;
+            int defense;
+            int points = 0;
+            int played = 0;
+            int won = 0;
+            int drawn = 0;
+            int lost = 0;
+            int gf = 0;
+            int ga = 0;
+            Team(this.name, this.attack, this.defense);
+            int get gd => gf - ga;
           }
 
           class Player {
-            double x, y;
-            double vx = 0, vy = 0;
-            bool isTeamRed; // true: Oyuncu Takımı (Kırmızı), false: Rakip (Mavi)
-            bool isControlled;
-            Player(this.x, this.y, this.isTeamRed, {this.isControlled = false});
+            String name;
+            String pos;
+            int overall;
+            int price;
+            Player(this.name, this.pos, this.overall, this.price);
           }
 
-          class MatchScreen extends StatefulWidget {
-            final int teamSize;
-            const MatchScreen({Key? key, required this.teamSize}) : super(key: key);
+          class AnaPanel extends StatefulWidget {
+            const AnaPanel({Key? key}) : super(key: key);
 
             @override
-            State<MatchScreen> createState() => _MatchScreenState();
+            State<AnaPanel> createState() => _AnaPanelState();
           }
 
-          class _MatchScreenState extends State<MatchScreen> {
-            // Saha ve Top
-            double ballX = 0, ballY = 0;
-            double ballVx = 0, ballVy = 0;
-            int scoreRed = 0, scoreBlue = 0;
-            int matchTime = 90;
+          class _AnaPanelState extends State<AnaPanel> {
+            int budget = 25000000;
+            int week = 1;
+            String currentTactic = 'Dengeli (4-3-3)';
+            int tacticBonus = 0;
 
-            // Joystick
-            Offset joystickDelta = Offset.zero;
-            bool isJoystickActive = false;
+            List<Player> mySquad = [
+              Player('Muslera', 'KL', 84, 0),
+              Player('Nelsson', 'DF', 81, 0),
+              Player('Sanchez', 'DF', 83, 0),
+              Player('Barış Alper', 'DF', 80, 0),
+              Player('Torreira', 'OS', 85, 0),
+              Player('Gabriel Sara', 'OS', 82, 0),
+              Player('Mertens', 'OS', 81, 0),
+              Player('Kerem', 'HF', 82, 0),
+              Player('Zaha', 'HF', 83, 0),
+              Player('Icardi', 'FV', 88, 0),
+              Player('Osimhen', 'FV', 89, 0),
+            ];
 
-            List<Player> players = [];
-            Timer? loopTimer;
-            Timer? matchTimer;
-            String announcement = '';
+            List<Player> transferMarket = [
+              Player('K. De Bruyne', 'OS', 91, 35000000),
+              Player('V. van Dijk', 'DF', 89, 30000000),
+              Player('E. Haaland', 'FV', 93, 50000000),
+              Player('T. Courtois', 'KL', 90, 28000000),
+              Player('H. Kane', 'FV', 90, 32000000),
+              Player('F. de Jong', 'OS', 87, 22000000),
+              Player('J. Bellingham', 'OS', 90, 45000000),
+              Player('R. Leao', 'HF', 88, 28000000),
+              Player('A. Hakimi', 'DF', 86, 20000000),
+              Player('L. Martinez', 'FV', 88, 27000000),
+            ];
 
-            @override
-            void initState() {
-              super.initState();
-              initMatch();
-              loopTimer = Timer.periodic(const Duration(milliseconds: 25), (t) => updatePhysics());
-              matchTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-                if (matchTime > 0) {
-                  setState(() => matchTime--);
-                } else {
-                  t.cancel();
-                  setState(() => announcement = 'MAÇ BİTTİ!');
-                }
-              });
-            }
+            // 20 Takımlı Tam Süper Lig Listesi
+            List<Team> leagueTeams = [
+              Team('Galatasaray', 85, 83),
+              Team('Fenerbahçe', 84, 82),
+              Team('Beşiktaş', 82, 80),
+              Team('Trabzonspor', 79, 78),
+              Team('Başakşehir', 77, 76),
+              Team('Samsunspor', 75, 74),
+              Team('Eyüpspor', 74, 73),
+              Team('Kasımpaşa', 74, 72),
+              Team('Göztepe', 73, 73),
+              Team('Sivasspor', 73, 72),
+              Team('Antalyaspor', 72, 72),
+              Team('Gaziantep FK', 72, 71),
+              Team('Alanyaspor', 72, 71),
+              Team('Çaykur Rizespor', 71, 71),
+              Team('Kayserispor', 71, 70),
+              Team('Konyaspor', 70, 70),
+              Team('Bodrum FK', 69, 69),
+              Team('Hatayspor', 69, 68),
+              Team('Adana Demirspor', 68, 67),
+              Team('Ankaragücü', 68, 67),
+            ];
 
-            @override
-            void dispose() {
-              loopTimer?.cancel();
-              matchTimer?.cancel();
-              super.dispose();
-            }
-
-            void initMatch() {
-              players.clear();
-              ballX = 0;
-              ballY = 0;
-              ballVx = 0;
-              ballVy = 0;
-
-              // Kırmızı Takım (Oyuncu)
-              for (int i = 0; i < widget.teamSize; i++) {
-                double py = (i - (widget.teamSize - 1) / 2) * 0.45;
-                players.add(Player(-0.5, py, true, isControlled: (i == 0)));
+            int get teamPower {
+              if (mySquad.isEmpty) return 0;
+              int sum = 0;
+              for (var p in mySquad) {
+                sum += p.overall;
               }
-
-              // Mavi Takım (Rakip)
-              for (int i = 0; i < widget.teamSize; i++) {
-                double py = (i - (widget.teamSize - 1) / 2) * 0.45;
-                players.add(Player(0.5, py, false));
-              }
+              return (sum / mySquad.length).round() + tacticBonus;
             }
 
-            void updatePhysics() {
+            void changeTactic(String val) {
               setState(() {
-                // 1. Joystick ile Kontrol Edilen Oyuncu
-                for (var p in players) {
-                  if (p.isControlled) {
-                    p.x += joystickDelta.dx * 0.025;
-                    p.y += joystickDelta.dy * 0.025;
-                  } else {
-                    // Yapay Zeka (Topa veya Pozisyona Koşma)
-                    double targetX = p.isTeamRed ? (ballX - 0.2) : (ballX + 0.2);
-                    double targetY = ballY;
-
-                    double dx = ballX - p.x;
-                    double dy = ballY - p.y;
-                    double dist = sqrt(dx * dx + dy * dy);
-
-                    if (dist > 0.05) {
-                      p.x += (dx / dist) * 0.012;
-                      p.y += (dy / dist) * 0.012;
-                    }
-
-                    // Rakip Şut Çekme Mantığı
-                    if (!p.isTeamRed && dist < 0.08) {
-                      ballVx = -0.04;
-                      ballVy = (Random().nextDouble() - 0.5) * 0.03;
-                    }
-                  }
-
-                  // Saha Sınırları
-                  p.x = p.x.clamp(-0.9, 0.9);
-                  p.y = p.y.clamp(-0.85, 0.85);
-
-                  // Topa Çarpma (Dribling)
-                  double bdx = ballX - p.x;
-                  double bdy = ballY - p.y;
-                  double bDist = sqrt(bdx * bdx + bdy * bdy);
-                  if (bDist < 0.07) {
-                    ballVx = bdx * 0.35 + (p.isControlled ? joystickDelta.dx * 0.015 : 0);
-                    ballVy = bdy * 0.35 + (p.isControlled ? joystickDelta.dy * 0.015 : 0);
-                  }
-                }
-
-                // 2. Top Fiziği (Sürtünme ve Duvarlar)
-                ballX += ballVx;
-                ballY += ballVy;
-                ballVx *= 0.94; // Sürtünme
-                ballVy *= 0.94;
-
-                // Kafes Duvarlarından Sekme
-                if (ballY > 0.88 || ballY < -0.88) {
-                  ballVy = -ballVy * 0.8;
-                  ballY = ballY.clamp(-0.88, 0.88);
-                }
-
-                // Gol Kontrolü (Sol ve Sağ Kale: Y [-0.25, 0.25])
-                if (ballX > 0.92) {
-                  if (ballY > -0.28 && ballY < 0.28) {
-                    scoreRed++;
-                    goalCelebration('⚽ GOL! KIRMIZI TAKIM');
-                  } else {
-                    ballVx = -ballVx * 0.8;
-                    ballX = 0.92;
-                  }
-                } else if (ballX < -0.92) {
-                  if (ballY > -0.28 && ballY < 0.28) {
-                    scoreBlue++;
-                    goalCelebration('⚽ GOL! MAVİ TAKIM');
-                  } else {
-                    ballVx = -ballVx * 0.8;
-                    ballX = -0.92;
-                  }
-                }
+                currentTactic = val;
+                if (val.contains('Hücum')) tacticBonus = 3;
+                else if (val.contains('Savunma')) tacticBonus = 1;
+                else tacticBonus = 2;
               });
             }
 
-            void goalCelebration(String msg) {
-              setState(() {
-                announcement = msg;
-                ballVx = 0;
-                ballVy = 0;
-              });
-              Future.delayed(const Duration(seconds: 2), () {
-                if (mounted) {
-                  setState(() => announcement = '');
-                  initMatch();
-                }
-              });
-            }
-
-            void shoot() {
-              Player user = players.firstWhere((p) => p.isControlled);
-              double dist = sqrt(pow(ballX - user.x, 2) + pow(ballY - user.y, 2));
-              if (dist < 0.12) {
+            void buyPlayer(Player p) {
+              if (budget >= p.price) {
                 setState(() {
-                  // Kaleye doğru sert şut
-                  ballVx = 0.055;
-                  ballVy = (user.y > 0 ? -0.01 : 0.01);
+                  budget -= p.price;
+                  transferMarket.remove(p);
+                  mySquad.add(p);
                 });
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${p.name} transfer edildi!')));
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Bütçe yetersiz!')));
               }
             }
 
-            void pass() {
-              Player user = players.firstWhere((p) => p.isControlled);
-              double dist = sqrt(pow(ballX - user.x, 2) + pow(ballY - user.y, 2));
-              if (dist < 0.12) {
-                // En yakın takım arkadaşını bul
-                Player? teammate;
-                double minDist = 999;
-                for (var p in players) {
-                  if (p.isTeamRed && !p.isControlled) {
-                    double d = sqrt(pow(p.x - user.x, 2) + pow(p.y - user.y, 2));
-                    if (d < minDist) {
-                      minDist = d;
-                      teammate = p;
-                    }
-                  }
-                }
-                if (teammate != null) {
-                  double dx = teammate.x - ballX;
-                  double dy = teammate.y - ballY;
-                  double d = sqrt(dx * dx + dy * dy);
-                  setState(() {
-                    ballVx = (dx / d) * 0.035;
-                    ballVy = (dy / d) * 0.035;
-                  });
-                }
+            void startNextMatch() {
+              if (week > 38) {
+                showDialog(
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    title: const Text('🏆 38 HAFTALIK SEZON BİTTİ!'),
+                    content: Text('Tebrikler! 20 takımlı lig maratonu tamamlandı.\nŞampiyon: ${leagueTeams[0].name} (${leagueTeams[0].points} Puan)'),
+                    actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Tamam'))],
+                  ),
+                );
+                return;
               }
+
+              // 20 takımlı lig için sıradaki rakip (1'den 19'a kadar döngü)
+              int opponentIndex = ((week - 1) % 19) + 1;
+              final opponent = leagueTeams[opponentIndex];
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => LiveMatchScreen(
+                    myTeamName: 'Galatasaray',
+                    myPower: teamPower,
+                    oppTeamName: opponent.name,
+                    oppPower: (opponent.attack + opponent.defense) ~/ 2,
+                    onMatchEnd: (myGoals, oppGoals) {
+                      setState(() {
+                        week++;
+                        var myTeam = leagueTeams.firstWhere((t) => t.name == 'Galatasaray');
+                        myTeam.played++;
+                        myTeam.gf += myGoals;
+                        myTeam.ga += oppGoals;
+                        opponent.played++;
+                        opponent.gf += oppGoals;
+                        opponent.ga += myGoals;
+
+                        if (myGoals > oppGoals) {
+                          myTeam.won++;
+                          myTeam.points += 3;
+                          opponent.lost++;
+                          budget += 3000000;
+                        } else if (myGoals == oppGoals) {
+                          myTeam.drawn++;
+                          myTeam.points += 1;
+                          opponent.drawn++;
+                          opponent.points += 1;
+                          budget += 1200000;
+                        } else {
+                          myTeam.lost++;
+                          opponent.won++;
+                          opponent.points += 3;
+                        }
+
+                        // Ligdeki diğer 18 takımın maç simülasyonu
+                        List<Team> otherTeams = leagueTeams.where((t) => t.name != 'Galatasaray' && t.name != opponent.name).toList();
+                        for (int i = 0; i < otherTeams.length; i += 2) {
+                          if (i + 1 < otherTeams.length) {
+                            var t1 = otherTeams[i];
+                            var t2 = otherTeams[i + 1];
+                            int g1 = Random().nextInt(4);
+                            int g2 = Random().nextInt(4);
+                            t1.played++;
+                            t1.gf += g1;
+                            t1.ga += g2;
+                            t2.played++;
+                            t2.gf += g2;
+                            t2.ga += g1;
+
+                            if (g1 > g2) {
+                              t1.won++;
+                              t1.points += 3;
+                              t2.lost++;
+                            } else if (g1 == g2) {
+                              t1.drawn++;
+                              t1.points += 1;
+                              t2.drawn++;
+                              t2.points += 1;
+                            } else {
+                              t2.won++;
+                              t2.points += 3;
+                              t1.lost++;
+                            }
+                          }
+                        }
+
+                        leagueTeams.sort((a, b) {
+                          if (b.points != a.points) return b.points.compareTo(a.points);
+                          return b.gd.compareTo(a.gd);
+                        });
+                      });
+                    },
+                  ),
+                ),
+              );
             }
 
             @override
             Widget build(BuildContext context) {
               return Scaffold(
-                backgroundColor: const Color(0xFF1E1E1E),
-                body: SafeArea(
-                  child: Stack(
-                    children: [
-                      // Volta Kafes Sahası
-                      Positioned.fill(
-                        child: CustomPaint(painter: VoltaPitchPainter()),
+                appBar: AppBar(
+                  title: const Text('⚽ SÜPER LİG MENAJER 2026', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  backgroundColor: const Color(0xFF1A2234),
+                  actions: [
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 16),
+                        child: Text('💰 €${(budget / 1000000).toStringAsFixed(1)}M', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 15)),
                       ),
-
-                      // Skor & Süre Paneli
-                      Positioned(
-                        top: 10,
-                        left: 20,
-                        right: 20,
+                    ),
+                  ],
+                ),
+                body: SingleChildScrollView(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Color(0xFF1E293B), Color(0xFF0F172A)]),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.amber.withOpacity(0.4)),
+                        ),
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text('🔴 SEN: $scoreRed', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.redAccent)),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
-                              child: Text('⏳ ${matchTime}s', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text('Takım: Galatasaray', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                                const SizedBox(height: 4),
+                                Text('Hafta: $week / 38 | Güç: $teamPower', style: const TextStyle(color: Colors.grey)),
+                              ],
                             ),
-                            Text('MAVİ: $scoreBlue 🔵', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green[600], foregroundColor: Colors.white),
+                              onPressed: startNextMatch,
+                              icon: const Icon(Icons.play_arrow),
+                              label: const Text('MAÇA ÇIK'),
+                            ),
                           ],
                         ),
                       ),
 
-                      // Gol Duyurusu
-                      if (announcement.isNotEmpty)
-                        Center(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                            color: Colors.black87,
-                            child: Text(announcement, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
-                          ),
+                      const SizedBox(height: 18),
+                      const Text('📋 Taktik & Diziliş', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 6),
+                      DropdownButtonFormField<String>(
+                        value: currentTactic,
+                        decoration: InputDecoration(
+                          filled: true,
+                          fillColor: const Color(0xFF1E293B),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-
-                      // Oyuncular (İnsan Görünümlü 2D Karakterler)
-                      ...players.map((p) => Align(
-                        alignment: Alignment(p.x, p.y),
-                        child: Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: p.isTeamRed ? Colors.red : Colors.blue,
-                            border: Border.all(color: p.isControlled ? Colors.yellowAccent : Colors.white, width: p.isControlled ? 3 : 1.5),
-                            boxShadow: [BoxShadow(color: Colors.black45, blurRadius: 4, offset: const Offset(1, 2))],
-                          ),
-                          child: Center(
-                            child: Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFFFCC80)), // Ten rengi kafa
-                            ),
-                          ),
-                        ),
-                      )),
-
-                      // Futbol Topu
-                      Align(
-                        alignment: Alignment(ballX, ballY),
-                        child: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: Colors.white,
-                            boxShadow: [BoxShadow(color: Colors.black87, blurRadius: 3)],
-                          ),
-                        ),
+                        items: ['Hücum (4-3-3)', 'Dengeli (4-3-3)', 'Kontra Atak (4-4-2)', 'Katı Savunma (5-3-2)']
+                            .map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                        onChanged: (v) => changeTactic(v!),
                       ),
 
-                      // Kontroller: Sol Taraf Sanal Joystick
-                      Positioned(
-                        bottom: 30,
-                        left: 30,
-                        child: GestureDetector(
-                          onPanStart: (d) => setState(() => isJoystickActive = true),
-                          onPanUpdate: (d) {
-                            setState(() {
-                              joystickDelta = Offset(
-                                (d.localPosition.dx - 45).clamp(-45.0, 45.0) / 45.0,
-                                (d.localPosition.dy - 45).clamp(-45.0, 45.0) / 45.0,
+                      const SizedBox(height: 20),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('🏆 Süper Lig Puan Tablosu (20 Takım)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                          Text('Hafta $week', style: const TextStyle(color: Colors.amberAccent, fontSize: 12)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(10)),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columnSpacing: 14,
+                            headingRowHeight: 36,
+                            dataRowMinHeight: 32,
+                            dataRowMaxHeight: 38,
+                            columns: const [
+                              DataColumn(label: Text('Sıra')),
+                              DataColumn(label: Text('Takım')),
+                              DataColumn(label: Text('O')),
+                              DataColumn(label: Text('G')),
+                              DataColumn(label: Text('B')),
+                              DataColumn(label: Text('M')),
+                              DataColumn(label: Text('Av')),
+                              DataColumn(label: Text('P')),
+                            ],
+                            rows: List.generate(leagueTeams.length, (index) {
+                              final t = leagueTeams[index];
+                              final isMyTeam = t.name == 'Galatasaray';
+                              return DataRow(
+                                color: WidgetStateProperty.resolveWith((_) => isMyTeam ? Colors.amber.withOpacity(0.15) : null),
+                                cells: [
+                                  DataCell(Text('${index + 1}', style: TextStyle(fontWeight: FontWeight.bold, color: index < 4 ? Colors.greenAccent : (index >= 16 ? Colors.redAccent : Colors.white)))),
+                                  DataCell(Text(t.name, style: TextStyle(fontWeight: isMyTeam ? FontWeight.bold : FontWeight.normal, color: isMyTeam ? Colors.amberAccent : Colors.white))),
+                                  DataCell(Text('${t.played}')),
+                                  DataCell(Text('${t.won}')),
+                                  DataCell(Text('${t.drawn}')),
+                                  DataCell(Text('${t.lost}')),
+                                  DataCell(Text('${t.gd}')),
+                                  DataCell(Text('${t.points}', style: const TextStyle(fontWeight: FontWeight.bold))),
+                                ],
                               );
-                            });
-                          },
-                          onPanEnd: (d) {
-                            setState(() {
-                              joystickDelta = Offset.zero;
-                              isJoystickActive = false;
-                            });
-                          },
-                          child: Container(
-                            width: 90,
-                            height: 90,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white12,
-                              border: Border.all(color: Colors.white30, width: 2),
-                            ),
-                            child: Center(
-                              child: Transform.translate(
-                                offset: joystickDelta * 25,
-                                child: Container(
-                                  width: 38,
-                                  height: 38,
-                                  decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.amberAccent),
-                                ),
-                              ),
-                            ),
+                            }),
                           ),
                         ),
                       ),
 
-                      // Kontroller: Sağ Taraf ŞUT & PAS Butonları
-                      Positioned(
-                        bottom: 30,
-                        right: 30,
-                        child: Row(
-                          children: [
-                            GestureDetector(
-                              onTap: pass,
-                              child: Container(
-                                width: 55,
-                                height: 55,
-                                decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.blueAccent),
-                                child: const Center(child: Text('PAS', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13))),
+                      const SizedBox(height: 20),
+                      const Text('⭐ Transfer Pazarı', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                      const SizedBox(height: 8),
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: transferMarket.length,
+                        itemBuilder: (context, i) {
+                          final p = transferMarket[i];
+                          return Card(
+                            color: const Color(0xFF1A233A),
+                            margin: const EdgeInsets.only(bottom: 6),
+                            child: ListTile(
+                              leading: CircleAvatar(backgroundColor: Colors.amber, radius: 18, child: Text(p.pos, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12))),
+                              title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                              subtitle: Text('Güç: ${p.overall} | Fiyat: €${(p.price / 1000000).toStringAsFixed(0)}M', style: const TextStyle(fontSize: 12)),
+                              trailing: ElevatedButton(
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6)),
+                                onPressed: () => buyPlayer(p),
+                                child: const Text('Satın Al', style: TextStyle(fontSize: 12)),
                               ),
                             ),
-                            const SizedBox(width: 16),
-                            GestureDetector(
-                              onTap: shoot,
-                              child: Container(
-                                width: 65,
-                                height: 65,
-                                decoration: const BoxDecoration(shape: BoxShape.circle, color: Colors.redAccent),
-                                child: const Center(child: Text('ŞUT', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15))),
-                              ),
-                            ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -454,40 +412,156 @@ jobs:
             }
           }
 
-          class VoltaPitchPainter extends CustomPainter {
+          class LiveMatchScreen extends StatefulWidget {
+            final String myTeamName;
+            final int myPower;
+            final String oppTeamName;
+            final int oppPower;
+            final Function(int myGoals, int oppGoals) onMatchEnd;
+
+            const LiveMatchScreen({
+              Key? key,
+              required this.myTeamName,
+              required this.myPower,
+              required this.oppTeamName,
+              required this.oppPower,
+              required this.onMatchEnd,
+            }) : super(key: key);
+
             @override
-            void paint(Canvas canvas, Size size) {
-              final p = Paint()..color = const Color(0xFF23382B); // Kafes zemin
-              canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), p);
+            State<LiveMatchScreen> createState() => _LiveMatchScreenState();
+          }
 
-              final linePaint = Paint()
-                ..color = Colors.white24
-                ..strokeWidth = 2
-                ..style = PaintingStyle.stroke;
+          class _LiveMatchScreenState extends State<LiveMatchScreen> {
+            int minute = 0;
+            int scoreA = 0;
+            int scoreB = 0;
+            List<String> matchEvents = [];
+            Timer? matchTimer;
+            bool isFinished = false;
 
-              // Saha Çizgileri
-              canvas.drawRect(Rect.fromLTWH(15, 30, size.width - 30, size.height - 60), linePaint);
-              canvas.drawLine(Offset(size.width / 2, 30), Offset(size.width / 2, size.height - 30), linePaint);
-              canvas.drawCircle(Offset(size.width / 2, size.height / 2), 45, linePaint);
+            @override
+            void initState() {
+              super.initState();
+              matchEvents.add('Hakem düdüğünü çaldı ve maç başladı!');
+              matchTimer = Timer.periodic(const Duration(milliseconds: 90), (t) {
+                if (minute < 90) {
+                  setState(() {
+                    minute += 2;
+                    simulateMinute(minute);
+                  });
+                } else {
+                  t.cancel();
+                  setState(() {
+                    isFinished = true;
+                    matchEvents.insert(0, '⏱️ MAÇ SONUCU: ${widget.myTeamName} $scoreA - $scoreB ${widget.oppTeamName}');
+                  });
+                }
+              });
+            }
 
-              // Kaleler
-              final goalPaint = Paint()..color = Colors.amber.withOpacity(0.5)..style = PaintingStyle.stroke..strokeWidth = 3;
-              canvas.drawRect(Rect.fromLTWH(2, (size.height / 2) - 40, 13, 80), goalPaint); // Sol Kale
-              canvas.drawRect(Rect.fromLTWH(size.width - 15, (size.height / 2) - 40, 13, 80), goalPaint); // Sağ Kale
+            void simulateMinute(int min) {
+              final rnd = Random();
+              double myChance = (widget.myPower / (widget.myPower + widget.oppPower)) * 0.08;
+              double oppChance = (widget.oppPower / (widget.myPower + widget.oppPower)) * 0.08;
+
+              if (rnd.nextDouble() < myChance) {
+                scoreA++;
+                matchEvents.insert(0, '⚽ $min\' GOOOOL! ${widget.myTeamName} golü buldu!');
+              } else if (rnd.nextDouble() < oppChance) {
+                scoreB++;
+                matchEvents.insert(0, '⚽ $min\' GOL! ${widget.oppTeamName} skoru değiştirdi.');
+              } else if (rnd.nextDouble() < 0.03) {
+                matchEvents.insert(0, '🟨 $min\' Hakem sarı kartını gösterdi.');
+              } else if (rnd.nextDouble() < 0.04) {
+                matchEvents.insert(0, '🧤 $min\' Kaleciden kritik kurtarış!');
+              }
             }
 
             @override
-            bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+            void dispose() {
+              matchTimer?.cancel();
+              super.dispose();
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                backgroundColor: const Color(0xFF0D111A),
+                appBar: AppBar(title: const Text('CANLI MAÇ ANLATIMI'), backgroundColor: const Color(0xFF1E293B)),
+                body: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(color: const Color(0xFF1E293B), borderRadius: BorderRadius.circular(16)),
+                        child: Column(
+                          children: [
+                            Text('⏱️ Dakika: $minute\'', style: const TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceAround,
+                              children: [
+                                Expanded(child: Text(widget.myTeamName, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.amber))),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(8)),
+                                  child: Text('$scoreA - $scoreB', style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+                                ),
+                                Expanded(child: Text(widget.oppTeamName, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.blueAccent))),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Align(alignment: Alignment.centerLeft, child: Text('Maç Olayları:', style: TextStyle(fontWeight: FontWeight.bold))),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: const Color(0xFF141A26), borderRadius: BorderRadius.circular(10)),
+                          child: ListView.builder(
+                            itemCount: matchEvents.length,
+                            itemBuilder: (context, i) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: Text(matchEvents[i], style: TextStyle(color: matchEvents[i].contains('GOOOOL') ? Colors.greenAccent : Colors.white70)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (isFinished)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber[700], foregroundColor: Colors.black),
+                              onPressed: () {
+                                widget.onMatchEnd(scoreA, scoreB);
+                                Navigator.pop(context);
+                              },
+                              child: const Text('MAÇI TAMAMLA & DEVAM ET', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            }
           }
           EOF
 
       - name: APK Derle
         run: |
-          cd futbol_app
+          cd menajer_app
           flutter build apk --release
 
       - name: APK Yukle
         uses: actions/upload-artifact@v4
         with:
-          name: VoltaFutbolOyunu
-          path: futbol_app/build/app/outputs/flutter-apk/app-release.apk
+          name: SuperLig20TakimMenajer
+          path: menajer_app/build/app/outputs/flutter-apk/app-release.apk
