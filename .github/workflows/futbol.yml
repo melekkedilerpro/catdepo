@@ -1,0 +1,446 @@
+name: Blok Futbol APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Depoyu Al
+        uses: actions/checkout@v4
+
+      - name: Java 17 Kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Flutter Kur
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Projeyi Hazirla
+        run: |
+          flutter create --platforms=android --org com.blokfutbol futbol_app
+          cd futbol_app
+
+          cat << 'EOF' > lib/main.dart
+          import 'dart:async';
+          import 'dart:math';
+          import 'package:flutter/material.dart';
+
+          void main() => runApp(const BlockSoccerApp());
+
+          class BlockSoccerApp extends StatelessWidget {
+            const BlockSoccerApp({Key? key}) : super(key: key);
+
+            @override
+            Widget build(BuildContext context) {
+              return MaterialApp(
+                debugShowCheckedModeBanner: false,
+                title: 'Blok Futbol',
+                theme: ThemeData.dark(),
+                home: const SoccerGameScreen(),
+              );
+            }
+          }
+
+          class SoccerGameScreen extends StatefulWidget {
+            const SoccerGameScreen({Key? key}) : super(key: key);
+
+            @override
+            State<SoccerGameScreen> createState() => _SoccerGameScreenState();
+          }
+
+          class Particle {
+            double x, y, vx, vy, size;
+            Color color;
+            double alpha;
+            Particle(this.x, this.y, this.vx, this.vy, this.size, this.color, this.alpha);
+          }
+
+          class _SoccerGameScreenState extends State<SoccerGameScreen> {
+            int score = 0;
+            int highScore = 0;
+            int lives = 5;
+            String message = 'Şut Çekmek İçin Topu İleri Kaydır!';
+            Color msgColor = Colors.amberAccent;
+
+            // Top Pozisyonu
+            double ballX = 0;
+            double ballY = 0.8;
+            double ballScale = 1.0;
+            double ballVx = 0;
+            double ballVy = 0;
+            bool isBallMoving = false;
+
+            // Minecraft Steve Kaleci
+            double keeperX = 0;
+            double keeperVx = 0.025;
+            double keeperY = 0.22;
+
+            // Parçacıklar
+            List<Particle> particles = [];
+            Timer? gameTimer;
+            Offset? dragStart;
+
+            @override
+            void initState() {
+              super.initState();
+              gameTimer = Timer.periodic(const Duration(milliseconds: 20), (t) => updateGame());
+            }
+
+            @override
+            void dispose() {
+              gameTimer?.cancel();
+              super.dispose();
+            }
+
+            void resetBall() {
+              setState(() {
+                ballX = 0;
+                ballY = 0.8;
+                ballScale = 1.0;
+                ballVx = 0;
+                ballVy = 0;
+                isBallMoving = false;
+              });
+            }
+
+            void triggerGoalExplosion(double x, double y) {
+              final rnd = Random();
+              for (int i = 0; i < 30; i++) {
+                double angle = rnd.nextDouble() * 2 * pi;
+                double speed = rnd.nextDouble() * 0.02 + 0.005;
+                particles.add(Particle(
+                  x,
+                  y,
+                  cos(angle) * speed,
+                  sin(angle) * speed,
+                  rnd.nextDouble() * 10 + 6,
+                  rnd.nextBool() ? Colors.greenAccent : (rnd.nextBool() ? Colors.amber : Colors.white),
+                  1.0,
+                ));
+              }
+            }
+
+            void updateGame() {
+              setState(() {
+                // Kaleci Hareketi
+                keeperX += keeperVx;
+                if (keeperX > 0.65 || keeperX < -0.65) {
+                  keeperVx = -keeperVx;
+                }
+
+                // Parçacıklar
+                for (var p in particles) {
+                  p.x += p.vx;
+                  p.y += p.vy;
+                  p.alpha -= 0.03;
+                }
+                particles.removeWhere((p) => p.alpha <= 0);
+
+                // Top Hareketi
+                if (isBallMoving) {
+                  ballX += ballVx;
+                  ballY += ballVy;
+                  ballScale = max(0.45, ballScale - 0.015);
+
+                  if (ballY <= 0.23) {
+                    isBallMoving = false;
+
+                    // Kurtarış
+                    if ((ballX - keeperX).abs() < 0.28) {
+                      lives--;
+                      message = '❌ KALECİ KURTARDI!';
+                      msgColor = Colors.redAccent;
+                      Future.delayed(const Duration(milliseconds: 1200), () {
+                        if (lives <= 0) {
+                          lives = 5;
+                          score = 0;
+                        }
+                        resetBall();
+                      });
+                    }
+                    // Gol
+                    else if (ballX >= -0.75 && ballX <= 0.75) {
+                      score++;
+                      if (score > highScore) highScore = score;
+                      message = '⚽ GOOOOL! (+1)';
+                      msgColor = Colors.greenAccent;
+                      triggerGoalExplosion(ballX, ballY);
+                      keeperVx = (keeperVx.abs() + 0.003) * (keeperVx > 0 ? 1 : -1);
+
+                      Future.delayed(const Duration(milliseconds: 1200), () {
+                        resetBall();
+                      });
+                    }
+                    // Aut
+                    else {
+                      lives--;
+                      message = '💨 DIŞARI ÇIKTI (AUT)!';
+                      msgColor = Colors.orangeAccent;
+                      Future.delayed(const Duration(milliseconds: 1200), () {
+                        if (lives <= 0) {
+                          lives = 5;
+                          score = 0;
+                        }
+                        resetBall();
+                      });
+                    }
+                  }
+                }
+              });
+            }
+
+            void onPanStart(DragStartDetails d) {
+              if (isBallMoving) return;
+              dragStart = d.localPosition;
+            }
+
+            void onPanEnd(DragEndDetails d) {
+              if (isBallMoving || dragStart == null) return;
+              final diff = d.velocity.pixelsPerSecond;
+
+              if (diff.dy < -200) {
+                setState(() {
+                  isBallMoving = true;
+                  ballVy = -0.025;
+                  ballVx = (diff.dx / 12000).clamp(-0.028, 0.028);
+                  message = 'ŞUT ÇEKİLDİ!';
+                  msgColor = Colors.white;
+                });
+              }
+            }
+
+            @override
+            Widget build(BuildContext context) {
+              return Scaffold(
+                backgroundColor: const Color(0xFF1B3B1B),
+                body: GestureDetector(
+                  onPanStart: onPanStart,
+                  onPanEnd: onPanEnd,
+                  child: Stack(
+                    children: [
+                      CustomPaint(
+                        size: Size.infinite,
+                        painter: MinecraftPitchPainter(),
+                      ),
+                      Positioned(
+                        top: 40,
+                        left: 20,
+                        right: 20,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF2C2C2C).withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white38, width: 3),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('GOL: $score', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amberAccent)),
+                                  Text('REKOR: $highScore', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                ],
+                              ),
+                              Row(
+                                children: List.generate(5, (i) => Icon(
+                                  Icons.favorite,
+                                  color: i < lives ? Colors.redAccent : Colors.black45,
+                                  size: 20,
+                                )),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        top: 110,
+                        left: 0,
+                        right: 0,
+                        child: Center(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            color: Colors.black54,
+                            child: Text(
+                              message,
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: msgColor),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Align(
+                        alignment: Alignment(keeperX, -0.55),
+                        child: const MinecraftSteveKeeper(),
+                      ),
+                      ...particles.map((p) => Positioned(
+                        left: (MediaQuery.of(context).size.width / 2) + (p.x * (MediaQuery.of(context).size.width / 2)),
+                        top: (MediaQuery.of(context).size.height / 2) + (p.y * (MediaQuery.of(context).size.height / 2)),
+                        child: Container(
+                          width: p.size,
+                          height: p.size,
+                          decoration: BoxDecoration(
+                            color: p.color.withOpacity(p.alpha.clamp(0.0, 1.0)),
+                            borderRadius: BorderRadius.circular(1),
+                          ),
+                        ),
+                      )),
+                      Align(
+                        alignment: Alignment(ballX, ballY),
+                        child: Transform.scale(
+                          scale: ballScale,
+                          child: const MinecraftBall(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+          }
+
+          class MinecraftPitchPainter extends CustomPainter {
+            @override
+            void paint(Canvas canvas, Size size) {
+              final paint = Paint();
+              final blockSize = 40.0;
+              for (double x = 0; x < size.width; x += blockSize) {
+                for (double y = 0; y < size.height; y += blockSize) {
+                  paint.color = ((x / blockSize).toInt() + (y / blockSize).toInt()) % 2 == 0
+                      ? const Color(0xFF388E3C)
+                      : const Color(0xFF2E7D32);
+                  canvas.drawRect(Rect.fromLTWH(x, y, blockSize, blockSize), paint);
+                }
+              }
+
+              final goalW = size.width * 0.78;
+              final goalH = 130.0;
+              final goalLeft = (size.width - goalW) / 2;
+              final goalTop = size.height * 0.12;
+
+              paint.color = const Color(0xFF1E1E1E).withOpacity(0.65);
+              canvas.drawRect(Rect.fromLTWH(goalLeft, goalTop, goalW, goalH), paint);
+
+              paint.color = Colors.white24;
+              paint.strokeWidth = 2;
+              for (double gx = goalLeft; gx <= goalLeft + goalW; gx += 20) {
+                canvas.drawLine(Offset(gx, goalTop), Offset(gx, goalTop + goalH), paint);
+              }
+              for (double gy = goalTop; gy <= goalTop + goalH; gy += 20) {
+                canvas.drawLine(Offset(goalLeft, gy), Offset(goalLeft + goalW, gy), paint);
+              }
+
+              paint.color = Colors.white;
+              paint.strokeWidth = 8;
+              paint.style = PaintingStyle.stroke;
+              canvas.drawRect(Rect.fromLTWH(goalLeft, goalTop, goalW, goalH), paint);
+            }
+
+            @override
+            bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+          }
+
+          class MinecraftSteveKeeper extends StatelessWidget {
+            const MinecraftSteveKeeper({Key? key}) : super(key: key);
+
+            @override
+            Widget build(BuildContext context) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFB57B52),
+                      border: Border.all(color: const Color(0xFF4A2A18), width: 3),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(height: 10, color: const Color(0xFF4A2A18)),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            Container(width: 6, height: 6, color: Colors.blueAccent),
+                            Container(width: 6, height: 6, color: Colors.blueAccent),
+                          ],
+                        ),
+                        Container(height: 4, width: 12, color: const Color(0xFF4A2A18)),
+                      ],
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 12, height: 32, color: Colors.amberAccent, margin: const EdgeInsets.only(right: 2)),
+                      Container(width: 30, height: 34, color: const Color(0xFF00838F)),
+                      Container(width: 12, height: 32, color: Colors.amberAccent, margin: const EdgeInsets.only(left: 2)),
+                    ],
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(width: 14, height: 22, color: const Color(0xFF1A237E), margin: const EdgeInsets.only(right: 2)),
+                      Container(width: 14, height: 22, color: const Color(0xFF1A237E)),
+                    ],
+                  ),
+                ],
+              );
+            }
+          }
+
+          class MinecraftBall extends StatelessWidget {
+            const MinecraftBall({Key? key}) : super(key: key);
+
+            @override
+            Widget build(BuildContext context) {
+              return Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(color: Colors.black, width: 4),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black54, offset: Offset(4, 6), blurRadius: 4),
+                  ],
+                ),
+                child: GridView.count(
+                  crossAxisCount: 3,
+                  padding: EdgeInsets.zero,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    Container(color: Colors.white),
+                    Container(color: Colors.black87),
+                    Container(color: Colors.white),
+                    Container(color: Colors.black87),
+                    Container(color: Colors.white),
+                    Container(color: Colors.black87),
+                    Container(color: Colors.white),
+                    Container(color: Colors.black87),
+                    Container(color: Colors.white),
+                  ],
+                ),
+              );
+            }
+          }
+          EOF
+
+      - name: APK Derle
+        run: |
+          cd futbol_app
+          flutter build apk --release
+
+      - name: APK Yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlokFutbolOyunu
+          path: futbol_app/build/app/outputs/flutter-apk/app-release.apk
